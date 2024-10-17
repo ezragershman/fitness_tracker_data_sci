@@ -1,0 +1,918 @@
+---
+title: "Data Analysis - Bellabeat Tech - Ezra G."
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "C:\\Users\\ezrag\\Desktop\\Data Anal")
+options(repos = c(CRAN = "https://cran.rstudio.com/"))
+                       
+```
+
+--PACKAGE INSTALLATION & LOADING-- 
+In this section, I install and load the necessary R packages that are essential for data manipulation, visualization, and interactive plots. Keeping a list of packages at the beginning of the notebook ensures that all dependencies are installed and loaded before proceeding with data analysis.
+
+```{r}
+install.packages("readr")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("plotly")
+install.packages("tidyverse")
+install.packages("lubridate")
+install.packages("ggvenn")
+install.packages("wordcloud2")
+
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(tidyverse)
+library(lubridate)
+library(ggvenn)
+library(wordcloud2)
+```
+
+-- IMPORTING AND CLEANING -- (To see detailed information about the used datasheets, their information, and about all of them, please check the end of this notebook)
+
+\*\* Fitabase Dataset - Kaggle\*\* 
+The Fitabase Dataset comes in two batches, each containing a month of collected data divided into different tables (March to April and April to May 2016). In order to effectively process & understand the usage trends, it would be helpful to merge the two months' data into one larger table.
+
+Combining the Fitabase Daily Activity data:
+This block imports the Fitabase daily activity data from two separate CSV files, ensuring the ActivityDate column is correctly formatted. It then combines the two datasets into one and adds metadata to indicate the device and data source.
+```{r}
+# Importing Daily Activity data from two CSV files for the specified date ranges
+dailyActivity_merged_312 <- read_csv("External Data/Fitabase Data 3.12.16-4.11.16/dailyActivity_merged_312.csv",
+  col_types = cols(ActivityDate = col_date(format = "%m/%d/%Y")))  # Ensure ActivityDate is read as a date
+
+dailyActivity_merged_412 <- read_csv("External Data/Fitabase Data 4.12.16-5.12.16/dailyActivity_merged_412.csv",
+  col_types = cols(ActivityDate = col_date(format = "%m/%d/%Y")))  # Same for the second file
+
+# Merging the two datasets into one larger table using rbind
+dailyActivity_merged <- rbind(dailyActivity_merged_312, dailyActivity_merged_412)
+
+# Adding new columns to identify the device and data source
+dailyActivity_merged <- dailyActivity_merged %>%
+  mutate(Device = "FitBit", data_src = "Fitabase")  # Label the source of data
+
+# Displaying the first few rows of the merged dataset to check the results
+head(dailyActivity_merged)
+```
+
+Combining the Fitabase Daily Sleep data:
+This block imports the Fitabase daily sleep data, ensuring the SleepDay column is formatted as a date. It adds metadata for the device and data source, then displays the first few rows for verification.
+```{r}
+# Importing Daily Sleep data from the specified CSV file
+sleepDay_merged <- read_csv("External Data/Fitabase Data 4.12.16-5.12.16/sleepDay_merged_412.csv",
+  col_types = cols(SleepDay = col_date(format = "%m/%d/%Y")))  # Ensure SleepDay is read as a date
+
+# Adding new columns to identify the device and data source
+sleepDay_merged <- sleepDay_merged %>%
+  mutate(Device = "FitBit", data_src = "Fitabase")  # Label the source of data
+
+# Displaying the first few rows of the sleep dataset to check the results
+head(sleepDay_merged)
+```
+(note: The data only covers one month, and it's unclear whether users were not tracking sleep in the previous month or if the data was simply not included. Regardless, it is important to note when using the data)
+
+
+Combining the Fitabase Daily Weight Log data :
+This block imports the Fitabase daily weight log data from two separate CSV files, ensuring the Date column is correctly formatted. It merges the two datasets and adds metadata about the device and data source, then displays the first few rows for verification.
+```{r}
+# Importing Daily Weight Log data from two CSV files for the specified date ranges
+weightLogInfo_merged_312 <- read_csv("External Data/Fitabase Data 3.12.16-4.11.16/weightLogInfo_merged_312.csv",
+  col_types = cols(Date = col_date(format = "%m/%d/%Y")))  # Ensure Date is read as a date
+
+weightLogInfo_merged_412 <- read_csv("External Data/Fitabase Data 4.12.16-5.12.16/weightLogInfo_merged_412.csv",
+  col_types = cols(Date = col_date(format = "%m/%d/%Y")))  # Same for the second file
+
+# Merging the two datasets into one using bind_rows
+weightLogInfo_merged <- bind_rows(weightLogInfo_merged_312, weightLogInfo_merged_412)
+
+# Adding new columns to identify the device and data source
+weightLogInfo_merged <- weightLogInfo_merged %>%
+  mutate(Device = "FitBit", data_src = "Fitabase")  # Label the source of data
+
+# Displaying the first few rows of the weight log dataset to check the results
+head(weightLogInfo_merged)
+```
+
+\*\* Mi Band Xiaomi Fitness Tracker Data - Kaggle (Damir Gadylyaev)\*\* 
+In this section, two CSV files—one containing step data and another containing sleep data—are loaded and merged based on the date. This dataset is valuable compared to the rest of my samples, because Damir's 2450+ days of continuous data reflects a highly engaged fitness tracker user. That being said, this level of consistency differs significantly from the more varied engagement levels in other users' data.
+
+```{r}
+# Load the step data from the Xiaomi Mi Band fitness tracker
+damir_steps <- read_csv("External Data/Fitness tracker data (2016 - present) [2450+days]/01_Steps.csv",
+  col_types = cols(date = col_date(format = "%m/%d/%Y")))
+
+# Load the sleep data from the Xiaomi Mi Band fitness tracker
+damir_sleep <- read_csv("External Data/Fitness tracker data (2016 - present) [2450+days]/02_Sleep.csv",
+  col_types = cols(date = col_date(format = "%m/%d/%Y")))
+
+# Merge the sleep and step data based on the date column
+merged_damir_data <- damir_sleep %>%
+  left_join(damir_steps, by = "date")
+
+# Add metadata columns for user identification and device information
+merged_damir_data <- merged_damir_data %>%
+  mutate(ID = "damir_1", Device = "Xiaomi Mi Band", data_src = "Damir")
+
+# Display the first few rows of the merged dataset
+head(merged_damir_data)
+```
+
+\*\* One year of Fitbit ChargeHR data - Kaggle (Alket Cecaj)\*\*  The cleaning process for this dataset involves removing periods from the Calories and Steps columns to ensure they are treated as numeric values, while commas in the Distance column will be replaced with periods to convert it to a numeric format and renamed to distance_km. Additionally, a new column, distance_mi, will be created by converting the distance from kilometers to miles.
+```{r}
+# Load the Fitbit ChargeHR dataset
+merged_alket_data <- read_csv("External Data/One_Year_of_FitBitChargeHR_Data - AlketCecaj.csv",
+  col_types = cols(Date = col_date(format = "%m/%d/%Y")))  # Parse Date as a date
+
+# Clean and transform the dataset
+merged_alket_data <- merged_alket_data %>%
+  mutate(
+    Calories = as.numeric(gsub("\\.", "", Calories)),         # Remove periods from Calories and convert to numeric
+    Steps = as.numeric(gsub("\\.", "", Steps)),               # Remove periods from Steps and convert to numeric
+    distance_km = as.numeric(gsub(",", ".", Distance)),       # Replace commas with periods in Distance and rename to distance_km
+    distance_mi = distance_km * 0.621371,                     # Convert distance_km to miles (1 km = 0.621371 miles)
+    ID = "alket_1",                                            # Add a new ID for the data source
+    Device = "Fitbit ChargeHR",                               # Specify the device used for tracking
+    data_src = "Alket"                                       # Indicate the data source
+  ) %>%
+  select(-Distance)  # Remove the original Distance column as it is no longer needed
+
+# Display the cleaned data
+head(merged_alket_data)
+```
+
+\*\* LifeSnaps Dataset \*\* 
+The European H2020 RAIS Project dataset contains daily Fitbit Sense data with various health and activity metrics. In this code, the data is cleaned by removing unnecessary columns related to specific emotional states, sleep, and environmental factors, focusing the dataset on core activity data. Additionally, the "Device" column is added to label the data source as coming from a Fitbit Sense.
+
+```{r}
+# Load the LifeSnaps dataset from the specified CSV file
+lifesnaps_data <- read_csv("External Data/daily_fitbit_sema_df_unprocessed.csv",
+  col_types = cols(date = col_date(format = "%m/%d/%Y")))  # Parse date column as date
+
+# Add metadata to the dataset to indicate the device and data source
+lifesnaps_data <- lifesnaps_data %>%
+  mutate(Device = "FitBit Sense",  # Set the Device column to "FitBit Sense"
+         data_src = "LifeSnaps")   # Set the data source to "LifeSnaps"
+
+# Remove unnecessary columns related to emotions, sleep, and environment
+lifesnaps_data <- lifesnaps_data %>% 
+  select(-nightly_temperature, -nremhr, -rmssd, -spo2,   # Remove sleep and physiological metrics
+         -full_sleep_breathing_rate, -ALERT, -HAPPY,   # Remove emotional state columns
+         -NEUTRAL, -SAD, -`RESTED/RELAXED`, -`TENSE/ANXIOUS`, -TIRED, # Continue removing emotional states
+         -ENTERTAINMENT, -GYM, -HOME, -HOME_OFFICE, -OTHER, -OUTDOORS, -TRANSIT, -`WORK/SCHOOL`) # Remove activity-related columns
+
+# Display the first few rows of the cleaned LifeSnaps dataset
+head(lifesnaps_data)
+```
+
+\*\* Five year pediatric use of a digital wearable fitness device: lessons from a pilot case study\*\* 
+The dataset includes five years of Fitbit data from a father and his daughter, who began using Fitbit One devices in 2013. The study tracks daily steps, activity, sleep, and other metrics to explore health and wellness patterns over time, focusing on consistent use starting in June 2013. The data covers both school and weekend days and was collected using the Fitbit API for research purposes.
+```{r}
+# Load and clean the teen step data from the specified CSV file
+teen_steps_data_new <- read_csv("External Data/teen_steps_data_new.csv",
+  col_types = cols(date = col_date(format = "%m/%d/%Y"))) %>%
+  mutate(Id = "adultStudy", device = "Fitbit One", data_src = "FitStudyButte")  # Add metadata for identification
+
+# Load and clean the teen sleep data from the specified CSV file
+teen_sleep_data_new <- read_csv("External Data/teen_sleep_data_new.csv",
+  col_types = cols(date = col_date(format = "%m/%d/%Y"))) %>%
+  mutate(Id = "adultStudy", device = "Fitbit One", data_src = "FitStudyButte")  # Add metadata for identification
+
+# Load and clean the adult step data from the specified CSV file
+adult_steps_data_new <- read_csv("External Data/adult_steps_data_new.csv",
+  col_types = cols(date = col_date(format = "%m/%d/%Y"))) %>%
+  mutate(Id = "teenStudy", device = "Fitbit One", data_src = "FitStudyButte")  # Add metadata for identification
+
+# Load and clean the adult sleep data from the specified CSV file
+adult_sleep_data_new <- read_csv("External Data/adult_sleep_data_new.csv",
+  col_types = cols(date = col_date(format = "%m/%d/%Y"))) %>%
+  mutate(Id = "teenStudy", device = "Fitbit One", data_src = "FitStudyButte")  # Add metadata for identification
+```
+
+Combining users' datasets together by date.
+```{r}
+# Merge adult sleep and step data into a single dataset
+adult_data <- full_join(adult_sleep_data_new, adult_steps_data_new, 
+                         by = c("date", "dayOfWeek", "dayOfWeekNumber", "Id", "data_src", "device"))
+
+# Merge teen sleep and step data into a single dataset
+teen_data <- full_join(teen_sleep_data_new, teen_steps_data_new, 
+                        by = c("date", "dayOfWeek", "dayOfWeekNumber", "Id", "data_src", "device"))
+
+```
+
+Combining all data from this dataset together. 
+```{r}
+# Combine the adult and teen datasets into a single dataset for analysis
+combined_test_data <- bind_rows(adult_data, teen_data)
+
+# Display the first few rows of the combined dataset
+head(combined_test_data)
+```
+
+
+\*\* --CLEANING-- \*\* 
+
+This block of code ensures that the ID columns across various datasets (daily activity, sleep data, and datasets from different sources like Damir, Alket, and RAIS) are all converted to character data type to maintain consistency.
+```{r}
+# Convert the Id column in the daily activity dataset to character type for consistency
+dailyActivity_merged <- dailyActivity_merged %>%
+  mutate(Id = as.character(Id))
+
+# Convert the Id column in the sleep data dataset to character type for consistency
+sleepDay_merged <- sleepDay_merged %>%
+  mutate(Id = as.character(Id))
+
+# Convert the ID column in Damir's merged dataset to character type for consistency
+merged_damir_data <- merged_damir_data %>%
+  mutate(ID = as.character(ID))
+
+# Convert the ID column in Alket's merged dataset to character type for consistency
+merged_alket_data <- merged_alket_data %>%
+  mutate(ID = as.character(ID))
+
+# Convert the id column in the LifeSnaps dataset to character type for consistency
+lifesnaps_data <- lifesnaps_data %>%
+  mutate(id = as.character(id))
+
+# Convert the Id column in the weight log information dataset to character type for consistency
+weightLogInfo_merged <- weightLogInfo_merged %>%
+  mutate(Id = as.character(Id))
+
+# Convert the Id column in the combined test dataset to character type for consistency
+combined_test_data <- combined_test_data %>%
+  mutate(Id = as.character(Id))
+```
+
+This block of code converts specific distance-related columns (such as TotalDistance and distance) to numeric data type. This ensures that these columns can be properly analyzed and processed for calculations or comparisons, as they may have been imported as non-numeric types initially.
+```{r}
+# Convert TotalDistance in the daily activity dataset to numeric for analysis
+dailyActivity_merged <- dailyActivity_merged %>%
+  mutate(TotalDistance = as.numeric(TotalDistance))
+
+# Convert distance in Damir's merged dataset to numeric for analysis
+merged_damir_data <- merged_damir_data %>%
+  mutate(distance = as.numeric(distance)) 
+
+# Convert distance_km in Alket's merged dataset to numeric for analysis
+merged_alket_data <- merged_alket_data %>%
+  mutate(distance_km = as.numeric(distance_km))
+```
+
+This section merges the Fitabase datasets for daily activity, sleep data, and weight log information into a single combined dataset. It uses a full join to ensure that all records are preserved, even if some datasets do not have corresponding entries for every day.
+```{r}
+# Combine daily activity, sleep data, and weight log datasets into a single dataset
+combined_fitabase_data <- full_join(dailyActivity_merged, sleepDay_merged, 
+  by = c("Id", "ActivityDate" = "SleepDay", "Device", "data_src")) %>%
+  full_join(weightLogInfo_merged, 
+            by = c("Id", "ActivityDate" = "Date", "Device", "data_src"))
+
+# Ensure that the Id column is of character type for consistency across merged datasets
+combined_fitabase_data <- combined_fitabase_data %>%
+  mutate(Id = as.character(Id))
+```
+
+
+This code prepares multiple datasets for merging by renaming columns with similar names to ensure compatibility. Each dataset is adjusted to have consistent column names, which facilitates row binding. Finally, the modified datasets are combined into a single data frame for further analysis.
+```{r}
+# Rename columns in each dataset before binding to ensure consistency
+
+# Prepare the LifeSnaps dataset with relevant columns renamed
+lifesnaps_data_renamed <- lifesnaps_data %>%
+  select(id, date, calories, distance, sleep_duration, steps, age, gender, Device, data_src)
+
+# Prepare the combined fitabase data with renamed columns for consistency
+combined_fitabase_data_renamed <- combined_fitabase_data %>%
+  select(id = Id,                         # Rename Id to id
+         date = ActivityDate,            # Rename ActivityDate to date
+         calories = Calories,            # Rename Calories to calories
+         distance = TotalDistance,       # Rename TotalDistance to distance
+         sleep_duration = TotalMinutesAsleep,  # Rename TotalMinutesAsleep to sleep_duration
+         steps = TotalSteps,             # Rename TotalSteps to steps
+         Device,                         # Retain Device column
+         data_src,                       # Retain data_src column
+         WeightKg,                       # Retain WeightKg column
+         WeightPounds)                   # Retain WeightPounds column
+
+# Prepare Damir's dataset with relevant columns renamed
+merged_damir_data_renamed <- merged_damir_data %>%
+  select(id = ID,                         # Rename ID to id
+         date,                            # Retain date column
+         calories,                        # Retain calories column
+         distance,                        # Retain distance column
+         steps,                           # Retain steps column
+         Device,                         # Retain Device column
+         data_src)                       # Retain data_src column
+
+# Prepare Alket's dataset with relevant columns renamed
+merged_alket_data_renamed <- merged_alket_data %>%
+  select(id = ID,                         # Rename ID to id
+         date = Date,                    # Rename Date to date
+         calories = Calories,            # Rename Calories to calories
+         steps = Steps,                  # Rename Steps to steps
+         distance = distance_km,         # Rename distance_km to distance
+         Device,                         # Retain Device column
+         data_src)                       # Retain data_src column
+
+# Prepare combined test data with relevant columns renamed
+combined_test_data_renamed <- combined_test_data %>%
+  select(id = Id,                         # Rename Id to id
+         date,                            # Retain date column
+         sleep_duration = minutesAsleep, # Rename minutesAsleep to sleep_duration
+         steps,                           # Retain steps column
+         Device = device,                # Rename device to Device
+         data_src)                       # Retain data_src column
+
+# Combine all renamed datasets into one data frame for further analysis
+merged_data <- bind_rows(
+  lifesnaps_data_renamed,                # Add renamed LifeSnaps data
+  combined_fitabase_data_renamed,        # Add renamed combined fitabase data
+  merged_damir_data_renamed,             # Add renamed Damir's data
+  merged_alket_data_renamed,             # Add renamed Alket's data
+  combined_test_data_renamed              # Add renamed combined test data
+)
+```
+
+This code will ensure that a record is counted as having activity, sleep, or weight only if the relevant columns are not NA and not equal to 0.
+```{r}
+# Create new boolean columns indicating the presence of activity, sleep, and weight records
+merged_data <- merged_data %>%
+  mutate(
+    # Check if there's any activity recorded based on calories, distance, or steps
+    isActivity = !(is.na(calories) | calories == 0) | 
+                 !(is.na(distance) | distance == 0) | 
+                 !(is.na(steps) | steps == 0),
+    
+    # Check if there's sleep recorded based on sleep_duration
+    isSleep = !(is.na(sleep_duration) | sleep_duration == 0),
+    
+    # Check if there's weight recorded based on WeightKg or WeightPounds
+    isWeight = !(is.na(WeightKg) | WeightKg == 0) | 
+               !(is.na(WeightPounds) | WeightPounds == 0)
+  )
+```
+
+This removes any records which exist, yet do not have any activity, sleep, or weight records on a given day.
+```{r}
+# Filter the dataset to include only records that have activity, sleep, or weight data
+merged_data <- merged_data %>%
+  filter(isActivity | isSleep | isWeight)
+```
+
+
+This block of code identifies and handles duplicate records in the dataset based on the combination of id and date.
+```{r}
+# Find duplicate records based on id and date
+duplicates <- merged_data %>%
+  group_by(id, date) %>%
+  filter(n() > 1) %>%
+  ungroup()
+
+# Display duplicates
+print(duplicates)
+```
+
+```{r}
+# Aggregate duplicate entries to consolidate data
+merged_data <- merged_data %>%
+  group_by(id, date) %>%          # Group by id and date
+  summarise(
+    calories = sum(calories, na.rm = TRUE),         # Sum calories for duplicate entries
+    distance = sum(distance, na.rm = TRUE),         # Sum distance for duplicate entries
+    sleep_duration = mean(sleep_duration, na.rm = TRUE),  # Average sleep duration for duplicates
+    steps = sum(steps, na.rm = TRUE),               # Sum steps for duplicate entries
+    WeightKg = mean(WeightKg, na.rm = TRUE),        # Average weight in kg for duplicates
+    WeightPounds = mean(WeightPounds, na.rm = TRUE),  # Average weight in pounds for duplicates
+    Device = Device,                                 # Retain the device information (assumed to be consistent)
+    data_src = data_src,                           # Retain the data source (assumed to be consistent)
+    gender = gender,                                 # Retain gender information (assumed to be consistent)
+    isActivity = isActivity,                         # Retain activity indicator
+    isSleep = isSleep,                               # Retain sleep indicator
+    isWeight = isWeight,                             # Retain weight indicator
+    .groups = 'drop'                                 # Drop grouping after summarization
+  )
+
+# Replace NaN values with NA
+merged_data <- merged_data %>%
+  mutate(across(everything(), ~ ifelse(is.nan(.), NA, .)))  # Convert NaN values to NA
+```
+
+--DATA ANALYSIS-- 
+
+This block of code counts the number of unique days or records for each id in the dataset. It groups the data by id and calculates the distinct count of date, allowing for an analysis of how many different unique days each user has data for. The result is then displayed for review.
+```{r}
+# Count unique days/records per ID
+unique_days_count <- merged_data %>%
+  group_by(id) %>%
+  summarise(uniqueDays = n_distinct(date), .groups = 'drop')
+
+# Display the result
+print(unique_days_count)
+```
+
+This code snippet counts the total number of activity, sleep, and weight records for each user identified by their id and data source (data_src). The results are stored in a new data frame called record_counts, which summarizes user engagement across different record types.
+```{r}
+# Count total records per ID and data source
+record_counts <- merged_data %>%
+  group_by(id, data_src) %>%
+  summarise(
+    # Count the total number of activity records (where isActivity is TRUE)
+    totalActivityRecords = sum(isActivity),
+    
+    # Count the total number of sleep records (where isSleep is TRUE)
+    totalSleepRecords = sum(isSleep),
+    
+    # Count the total number of weight records (where isWeight is TRUE)
+    totalWeightRecords = sum(isWeight),
+    
+    # Specify that groups should be dropped after summarising
+    .groups = 'drop'
+  )
+
+# Display the first few rows of the record counts
+head(record_counts)
+```
+This code snippet merges the unique_days_count data frame with the record_counts data frame based on the id column. The resulting data frame, merged_summary, combines the count of unique days with the total records of activity, sleep, and weight for each user. This comprehensive summary provides insights into user behavior and data collection over time.
+```{r}
+# Merge the unique days count with the record counts based on user ID
+merged_summary <- unique_days_count %>%
+  left_join(record_counts, by = "id")
+
+head(merged_summary)
+```
+
+This section creates a Venn diagram to visualize the overlap of days with activity, sleep, and weight records in the merged_data dataset.
+```{r}
+# Create a unique data frame by selecting date and id for each record type
+activity_days <- merged_data %>%
+  filter(isActivity == 1) %>%  # Filter for activity records
+  select(id, date) %>%         # Select relevant columns
+  distinct()                   # Get distinct combinations of id and date
+
+sleep_days <- merged_data %>%
+  filter(isSleep == 1) %>%     # Filter for sleep records
+  select(id, date) %>%         # Select relevant columns
+  distinct()                   # Get distinct combinations of id and date
+
+weight_days <- merged_data %>%
+  filter(isWeight == 1) %>%    # Filter for weight records
+  select(id, date) %>%         # Select relevant columns
+  distinct()                   # Get distinct combinations of id and date
+
+# Create a list of the unique days for each record type
+days_list <- list(
+  Activity = unique(paste(activity_days$id, activity_days$date)),  # Combine id and date for activity records
+  Sleep = unique(paste(sleep_days$id, sleep_days$date)),          # Combine id and date for sleep records
+  Weight = unique(paste(weight_days$id, weight_days$date))       # Combine id and date for weight records
+)
+
+# Create the Venn diagram with white text
+ggvenn(days_list, fill_color = c("blue", "red", "green"), show_percentage = TRUE, text_color = "white") +
+  labs(title = "Venn Diagram of Record Types by Days")  # Add a title to the Venn diagram
+```
+
+
+-Descriptive Statistics-
+This code computes descriptive statistics for the counts of records. This includes calculating the mean, median, minimum, maximum, and standard deviation for the total records.
+```{r}
+# Descriptive statistics for the merged summary
+summary_stats <- merged_summary %>%
+  summarise(
+    meanUniqueDays = mean(uniqueDays, na.rm = TRUE),
+    medianUniqueDays = median(uniqueDays, na.rm = TRUE),
+    minUniqueDays = min(uniqueDays, na.rm = TRUE),
+    maxUniqueDays = max(uniqueDays, na.rm = TRUE),
+    sdUniqueDays = sd(uniqueDays, na.rm = TRUE),
+    meanActivityRecords = mean(totalActivityRecords, na.rm = TRUE),
+    medianActivityRecords = median(totalActivityRecords, na.rm = TRUE),
+    meanSleepRecords = mean(totalSleepRecords, na.rm = TRUE),
+    medianSleepRecords = median(totalSleepRecords, na.rm = TRUE),
+    meanWeightRecords = mean(totalWeightRecords, na.rm = TRUE),
+    medianWeightRecords = median(totalWeightRecords, na.rm = TRUE)
+  )
+
+head(summary_stats)
+```
+Mean Unique Days: The average number of days users logged data is approximately 129. This indicates a decent level of engagement over time.
+
+Median Unique Days: The median value is 69, suggesting that half of the users logged data for 69 days or fewer. This disparity between the mean and median indicates that a few users are logging a significant number of days, skewing the average upward.
+
+Minimum Unique Days: The user with the fewest unique days logged data for only 8 days, which may suggest low engagement or limited usage.
+
+Maximum Unique Days: One user recorded data for 2417 days (Damir), showing an exceptional level of commitment. This user likely represents a long-term, dedicated tracker.
+
+Standard Deviation of Unique Days: The high standard deviation of 315.08 indicates a wide variation in the number of unique days logged among users, reinforcing the idea that while many users log data for fewer days, a few consistently log data over a much longer period.
+
+Mean Activity Records: On average, users recorded about 130 activity logs, suggesting regular engagement with activity tracking.
+
+Median Activity Records: The median of 69 indicates that half of the users logged fewer than 69 activity records, suggesting that a smaller number of users contribute a disproportionately large number of records.
+
+Mean Sleep Records: Users logged an average of about 57 sleep records, indicating that sleep tracking is less frequent compared to activity tracking.
+
+Median Sleep Records: The median indicates that many users recorded sleep data for 31 days or fewer, which suggests inconsistency in sleep logging.
+
+Mean Weight Records: The average of 0.9454545	suggests that users rarely logged their weight, with many users possibly not recording this information at all.
+
+Median Weight Records: A median of 0 indicates that half of the users did not log any weight records, highlighting low engagement with weight tracking.
+
+
+Overall Insights
+The contrast between the means and medians for unique days and activity records suggests that while some users are highly engaged, many users are not as active or consistent.
+The low number of weight records indicates a potential area for improvement in tracking behavior, as users may find it less relevant or have difficulty integrating it into their routine.
+The significant variation in unique days suggests that there are both casual users and highly committed ones. It might be worthwhile to further explore the characteristics of these two groups.
+
+-Clustering-
+In this section, we perform clustering analysis to group users based on their total activity, sleep, and weight records. This will help us identify patterns in user behavior and categorize users more effectively.
+```{r}
+# Prepare the data by selecting relevant columns for clustering analysis.
+# We focus on total activity records, sleep records, and weight records to understand user behavior.
+clustering_data <- merged_summary %>%
+  select(totalActivityRecords, totalSleepRecords, totalWeightRecords)
+
+# Normalize the data to ensure that each feature contributes equally to the clustering process.
+# This step helps in avoiding any bias due to differences in scales among the variables.
+clustering_data_scaled <- scale(clustering_data)
+
+
+# Calculate the Total Within-Cluster Sum of Squares (WSS) for 1 to 10 clusters.
+# This metric helps to evaluate how compact the clusters are. A lower WSS indicates better clustering.
+wss <- sapply(1:10, function(k) {
+  kmeans(clustering_data_scaled, centers = k, nstart = 10)$tot.withinss
+})
+
+# Create a data frame for plotting the elbow method results.
+# The elbow method helps in determining the optimal number of clusters by looking for a point where the rate of decrease sharply changes.
+elbow_data <- data.frame(Clusters = 1:10, WSS = wss)
+
+# Plot the elbow method graph to visualize the relationship between the number of clusters and WSS.
+# This will help identify the ideal number of clusters to use for our analysis.
+ggplot(elbow_data, aes(x = Clusters, y = WSS)) +
+  geom_line() +  # Add a line to connect the points for better visualization.
+  geom_point() +  # Add points to highlight the WSS values for each cluster count.
+  labs(title = "Elbow Method for Optimal K",  # Title for the plot.
+       x = "Number of Clusters", 
+       y = "Total Within-Cluster Sum of Squares (WSS)") + 
+  theme_minimal()
+```
+
+In this section, we perform K-means clustering on the summarized data to group users based on their total activity, sleep, and weight records. We then visualize the clustering results in a 3D scatter plot to better understand the distribution of the clusters.
+```{r}
+# Run K-means clustering
+set.seed(234)  # Set a random seed for reproducibility of the results
+kmeans_result <- kmeans(merged_summary %>% select(totalActivityRecords, totalSleepRecords, totalWeightRecords), centers = 3)
+
+# Add cluster results to the data frame
+merged_summary$cluster <- kmeans_result$cluster
+
+# Create a 3D scatter plot to visualize the clustering results
+plot_ly(data = merged_summary, 
+        x = ~totalActivityRecords,  # X-axis representing total activity records
+        y = ~totalSleepRecords,     # Y-axis representing total sleep records
+        z = ~totalWeightRecords,     # Z-axis representing total weight records
+        color = ~factor(cluster),     # Color points based on the assigned cluster
+        colors = c("red", "green", "blue"),  # Specify colors for the clusters
+        type = "scatter3d",          # Create a 3D scatter plot
+        mode = "markers") %>%        # Use markers to represent the data points
+  layout(
+    title = "3D K-means Clustering",  # Title for the plot
+    scene = list(
+      xaxis = list(title = "Total Activity Records"),  # X-axis label
+      yaxis = list(title = "Total Sleep Records"),     # Y-axis label
+      zaxis = list(title = "Total Weight Records")      # Z-axis label
+    )
+  )
+```
+
+Red (Cluster 1): Concentrated mainly at higher weight records.
+Green (Cluster 2): Close to the center of the plot, indicating mid-range values for all three variables.
+Blue (Cluster 3): Spread towards higher values of total sleep and activity records, with lower weight records.
+
+```{r}
+# Generate cluster profiles to summarize key metrics for each cluster.
+# This analysis will help understand the characteristics of users within each cluster.
+cluster_profiles <- merged_summary %>%
+  group_by(cluster) %>%  # Group data by cluster assignment.
+  summarise(
+    totalUsers = n(),  # Count the total number of users in each cluster.
+    meanActivity = mean(totalActivityRecords, na.rm = TRUE),  # Calculate the average activity records per cluster.
+    meanSleep = mean(totalSleepRecords, na.rm = TRUE),  # Calculate the average sleep records per cluster.
+    meanWeight = mean(totalWeightRecords, na.rm = TRUE),  # Calculate the average weight records per cluster.
+    .groups = 'drop'  # Ungroup the data after summarising.
+  )
+
+# Display the cluster profiles.
+print(cluster_profiles) 
+```
+
+Upon reviewing the clusters, it became evident that individuals in Cluster 3, characterized by having more vastly more records, significantly skewed the results. Consequently, we need to filter out Cluster 3 users from our analysis to ensure a more accurate representation of the remaining data.
+```{r}
+# Filter for users in cluster 3
+# This identifies users belonging to Cluster 3 for review and potential removal.
+cluster_3_users <- merged_summary %>%
+  filter(cluster == 3)
+
+# Print the users in Cluster 3 for analysis
+print(cluster_3_users)
+```
+As expected, these users each have over 1000 activity records, when the average isn't even above 200 for the other clusters. 
+
+
+```{r}
+# Filter out users in cluster 3
+# This step removes users belonging to Cluster 3 from the merged_summary dataset.
+filtered_data <- merged_summary %>%
+  filter(cluster != 3)
+
+# Re-cluster the remaining data using K-means
+# Set a seed for reproducibility of the clustering results.
+set.seed(123456)  
+new_kmeans <- kmeans(filtered_data[, c("totalActivityRecords", "totalSleepRecords", "totalWeightRecords")], centers = 3)
+
+# Add the new cluster assignments to the filtered data
+# This step updates the filtered dataset with the new cluster assignments generated from the K-means algorithm.
+filtered_data <- filtered_data %>%
+  mutate(new_cluster = new_kmeans$cluster)
+
+# Print the updated data with new cluster assignments for review
+# This displays the filtered dataset along with the new cluster labels.
+print(filtered_data)
+```
+In this section, we generate the cluster profiles and scatterplot for the filtered data, which helps us understand the average characteristics of users within each cluster.
+```{r}
+# Generate cluster profiles for the filtered data
+# This groups the filtered dataset by the new clusters and calculates the average records and user count for each cluster.
+cluster_profiles <- filtered_data %>%
+  group_by(new_cluster) %>%
+  summarise(
+    avgActivityRecords = mean(totalActivityRecords, na.rm = TRUE),  # Average total activity records per cluster
+    avgSleepRecords = mean(totalSleepRecords, na.rm = TRUE),        # Average total sleep records per cluster
+    avgWeightRecords = mean(totalWeightRecords, na.rm = TRUE),      # Average total weight records per cluster
+    userCount = n(),                                                 # Number of users in each cluster
+    .groups = 'drop'                                               # Ungroup the data after summarization
+  )
+
+# Print the cluster profiles for review
+print(cluster_profiles)
+```
+
+```{r}
+# Create a 3D scatter plot for the filtered clusters
+# This visualizes the distribution of users in the filtered data based on their total activity, sleep, and weight records.
+plot_ly(filtered_data, x = ~totalActivityRecords, y = ~totalSleepRecords, z = ~totalWeightRecords, 
+        color = ~as.factor(new_cluster), colors = c("red", "green", "blue"), 
+        marker = list(size = 5)) %>%
+  layout(title = "3D Scatter Plot of Filtered Clusters",  # Title for the plot
+         scene = list(xaxis = list(title = "Total Activity Records"),  # Label for x-axis
+                      yaxis = list(title = "Total Sleep Records"),      # Label for y-axis
+                      zaxis = list(title = "Total Weight Records")))    # Label for z-axis
+```
+Red (Cluster 1): Positioned mostly around lower values of sleep and activity records, with some variation in weight records. This cluster is positioned primarily around lower values for sleep and activity records, suggesting these users may have less engagement with fitness activities or sleep tracking.
+
+ (Cluster 2): Concentrated in the middle of the plot, with balanced values of sleep, activity, and weight records. Users in this cluster exhibit balanced values across all metrics, indicating moderate engagement in sleep and activity, making them a central group in the analysis.
+
+Blue (Cluster 3): Shows more spread, particularly towards higher sleep records, while activity and weight remain moderate. This cluster shows a broader distribution, particularly toward higher sleep records, while activity and weight remain at moderate levels. This indicates a diverse group with potentially varying lifestyles or data recording behaviors.
+
+The three clusters highlight different user behaviors based on their activity and sleep records. Red cluster users may require more engagement strategies, while green cluster users serve as a balanced reference group. The blue cluster indicates users who are more active in terms of sleep but may not be engaging as much in physical activity. 
+
+
+-Female Data-
+In this section, we categorize user data by gender. This helps to distinguish users from different studies and data sources, which can be useful for further gender-based analyses. The teen and adult in the study were confirmed to be a daughter and father respectively. Alket and Damir are typically men's names in their respective cultures. The data in the FitaBase dataset has no indication of any of the genders of their users.
+```{r}
+merged_data <- merged_data %>%
+  mutate(gender = case_when(
+    id == "teenStudy" ~ "FEMALE",
+    id == "adultStudy" ~ "MALE",
+    id == "damir_1" ~ "MALE",
+    id == "alket_1" ~ "MALE",
+    data_src == "FitaBase" ~ "UNKNOWN",
+    TRUE ~ gender  # Retain original value if no condition is met
+  ))
+```
+
+
+This section examines the distribution of records by gender, providing insights into the representation of different genders in our dataset. A pie chart is used to visualize the percentage of records associated with each gender.
+```{r}
+# Count records by gender
+record_gender_counts <- merged_data %>%
+  group_by(gender) %>%
+  summarise(user_count = n(), .groups = 'drop') %>%  # Summarize the count of records for each gender.
+  mutate(percentage = (user_count / sum(user_count)) * 100)  # Calculate the percentage of each gender's records.
+
+# Create a pie chart for users by gender with percentages
+ggplot(record_gender_counts, aes(x = "", y = user_count, fill = gender)) +
+  geom_bar(stat = "identity", width = 1) +  # Create a bar chart, which will be transformed into a pie chart.
+  coord_polar(theta = "y") +  # Convert the bar chart into a pie chart using polar coordinates.
+  geom_text(aes(label = paste0(gender, ": ", user_count, " \n(", round(percentage, 1), "%)")), 
+            position = position_stack(vjust = 0.5)) +  # Add labels with counts and percentages inside the pie slices.
+  labs(title = "Distribution of Records by Gender of User") +  # Add a title to the chart.
+  theme_void()  # Remove background and axis elements for a cleaner pie chart.
+```
+
+This section provides a breakdown of unique users by gender, helping us understand the representation of each gender within the dataset. A pie chart is used to visually depict the proportion of unique users from each gender.
+```{r}
+# Get unique individuals and their genders
+unique_genders <- merged_data %>%
+  select(id, gender) %>%  # Select user IDs and their corresponding genders.
+  distinct()  # Ensure that each user is counted only once.
+
+# Count the ratio of genders among unique users
+gender_counts <- unique_genders %>%
+  group_by(gender) %>%  # Group data by gender.
+  summarise(count = n(), .groups = 'drop') %>%  # Count the number of unique users for each gender.
+  mutate(percentage = (count / sum(count)) * 100)  # Calculate the percentage representation of each gender.
+
+# Create a pie chart of gender distribution with counts and percentages
+ggplot(gender_counts, aes(x = "", y = count, fill = gender)) +
+  geom_bar(stat = "identity", width = 1) +  # Create a bar chart to represent the counts, which will be turned into a pie chart.
+  coord_polar("y") +  # Transform the bar chart into a pie chart.
+  geom_text(aes(label = paste0(gender, ": ", count, " \n(", round(percentage, 1), "%)")),
+            position = position_stack(vjust = 0.5)) +  # Add text labels with gender, count, and percentage for each slice.
+  labs(title = "Gender Distribution of Unique Users") +  # Add a title to the pie chart.
+  theme_void() +  # Apply a theme that removes unnecessary plot elements for a clean appearance.
+  theme(legend.title = element_blank())  # Remove the legend title for a simplified look.
+```
+
+In this section, we filter the data to include only records where the gender is identified as "FEMALE" or "UNKNOWN." This approach allows us to focus on these two groups for further analysis.
+```{r}
+# Filter for female and unknown users
+female_users_data <- merged_data %>%
+  filter(gender %in% c("FEMALE", "UNKNOWN"))  # Retain records where gender is either "FEMALE" or "UNKNOWN".
+```
+
+
+This section calculates the total activity, sleep, and weight records for female and unknown users on a monthly basis. We first convert the `date` column to a Date type, extract the month, and then group the data by month to summarize the total counts.
+```{r}
+# Convert date to Date type and extract month, then summarize records by month
+female_usage_monthly <- female_users_data %>% 
+  mutate(month = format(as.Date(date), "%m")) %>%  # Convert date to Date type and extract month as a two-digit format.
+  group_by(month) %>%  # Group data by month.
+  summarise(
+    totalActivityRecords = sum(isActivity, na.rm = TRUE),  # Sum up activity records for each month.
+    totalSleepRecords = sum(isSleep, na.rm = TRUE),  # Sum up sleep records for each month.
+    totalWeightRecords = sum(isWeight, na.rm = TRUE),  # Sum up weight records for each month.
+    .groups = 'drop'  # Drop grouping structure for a cleaner result.
+  )
+```
+
+In this section, we calculate the total number of activity, sleep, and weight records for female and unknown users across different days of the week. We first convert the `date` column to a Date type, extract the day of the week, and then group the data by `dayOfWeek` to summarize the total counts.
+```{r}
+# Extract day of the week and summarize records by day of the week
+female_usage_weekday <- female_users_data %>% 
+  mutate(dayOfWeek = weekdays(as.Date(date))) %>%  # Convert date to Date type and extract the weekday name.
+  group_by(dayOfWeek) %>%  # Group data by day of the week.
+  summarise(
+    totalActivityRecords = sum(isActivity, na.rm = TRUE),  # Sum up activity records for each day.
+    totalSleepRecords = sum(isSleep, na.rm = TRUE),  # Sum up sleep records for each day.
+    totalWeightRecords = sum(isWeight, na.rm = TRUE),  # Sum up weight records for each day.
+    .groups = 'drop'  # Drop grouping structure for a cleaner result.
+  )
+```
+
+In this section, we create bar charts to visualize the activity and sleep records of female and unknown users across months and days of the week. These graphs will help highlight trends in user engagement over different time periods.
+```{r}
+# Bar graph for usage by month
+female_usage_monthly_long <- female_usage_monthly %>%
+  pivot_longer(cols = c(totalActivityRecords, totalSleepRecords), names_to = "RecordType", values_to = "Count")
+
+ggplot(female_usage_monthly_long, aes(x = month, y = Count, fill = RecordType)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  labs(title = "Monthly Usage of Female Users", x = "Month", y = "Total Records") +
+  theme_minimal() +
+  scale_fill_manual(values = c("totalActivityRecords" = "steelblue", "totalSleepRecords" = "lightpink")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Bar graph for usage by day of the week
+female_usage_weekday_long <- female_usage_weekday %>%
+  pivot_longer(cols = c(totalActivityRecords, totalSleepRecords), names_to = "RecordType", values_to = "Count")
+
+ggplot(female_usage_weekday_long, aes(x = reorder(dayOfWeek, match(dayOfWeek, c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))), y = Count, fill = RecordType)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.9)) +
+  labs(title = "Weekly Usage of Female Users", x = "Day of the Week", y = "Total Records") +
+  theme_minimal() +
+  scale_fill_manual(values = c("totalActivityRecords" = "steelblue", "totalSleepRecords" = "lightpink"))
+
+```
+Findings:
+Lack of Weight Records: There are no users with recorded weight data in this subset, which aligns with expectations as weight records were initially sparse across the datasets.
+
+Even Distribution of Usage Across Days of the Week: The analysis of records across different days of the week indicates that user activity and sleep tracking are relatively consistent. There is no significant variation in usage patterns from one day to another, suggesting that day of the week does not strongly influence users’ tracking behavior.
+
+Monthly Usage Trends: The monthly analysis reveals two notable peaks in usage:
+Summer Months (May-July): Usage tends to increase during these months. This may be attributed to higher physical activity levels during the summer, as users are more active and likely to spend time outdoors, which encourages them to track their activities and sleep more regularly.
+Winter Months and Holidays (November-January): Another peak is observed around the holiday season and the start of the new year. This could be due to users receiving new fitness trackers as gifts, or a renewed focus on health and fitness as part of New Year's resolutions, leading to a temporary boost in tracking activity and sleep data.
+
+
+-Female Consistent Usage-
+This code defines a function to calculate the streaks of consecutive days with activity or sleep records for female users. It summarizes the maximum and average streak lengths for each user, providing insights into consistent usage patterns.
+```{r}
+# This function calculates streaks of consecutive days with activity or sleep records for each user.
+calculate_streaks <- function(data) {
+  # Sort data by id and date
+  data <- data %>%
+    arrange(id, date)
+  
+  # Create a column to identify consecutive days
+  data <- data %>%
+    group_by(id) %>%
+    mutate(is_consecutive = as.integer(date - lag(date, default = first(date)) == 1))
+  
+  # Calculate streak lengths consistently
+  streaks <- data %>%
+    group_by(id, streak_group = cumsum(is_consecutive == 0)) %>%
+    summarise(streak_length = n(), .groups = 'drop') %>%
+    filter(streak_length > 1)  # Only keep streaks longer than 1 day
+  
+  # Summarize streaks: max and average per user
+  streak_summary <- streaks %>%
+    group_by(id) %>%
+    summarise(max_streak = max(streak_length),  # Maximum streak length for each user
+              avg_streak = mean(streak_length, na.rm = TRUE))  # Average streak length for each user
+  
+  return(streak_summary)  # Return the summarized streak information
+}
+```
+
+This code applies the previously defined calculate_streaks function to summarize streak lengths of consecutive activity or sleep records for all users and female users specifically. It then visualizes the maximum and average streak lengths for female users with bar plots, enabling a comparison of usage consistency among individual users.
+```{r}
+# Apply the function to calculate streaks for the entire dataset and for female users
+all_streak_summary <- calculate_streaks(merged_data)  # Summary for all users
+female_streak_summary <- calculate_streaks(female_users_data)  # Summary for female users
+
+# View the first few rows of the summaries
+head(all_streak_summary)  # Display summary for all users
+head(female_streak_summary)  # Display summary for female users
+
+# Plot maximum streak lengths for female users
+ggplot(female_streak_summary, aes(x = id, y = max_streak, fill = id)) +
+  geom_bar(stat = "identity") +  # Create a bar chart for maximum streak lengths
+  labs(title = "Maximum Streak Lengths for Fem Users", 
+       x = "User ID", 
+       y = "Max Streak Length") +
+  theme_minimal() +  # Apply a minimal theme for aesthetics
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 1), # Adjust text size and angle for better visibility
+        legend.position = "right") # Position the legend to the right
+
+# Plot average streak lengths for female users
+ggplot(female_streak_summary, aes(x = id, y = avg_streak, fill = id)) +
+  geom_bar(stat = "identity") +  # Create a bar chart for average streak lengths
+  labs(title = "Average Streak Lengths for Fem Users", 
+       x = "User ID", 
+       y = "Avg Streak Length") +
+  theme_minimal() +  # Apply a minimal theme for aesthetics
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 1), # Adjust text size and angle for better visibility
+        legend.position = "right") # Position the legend to the right
+```
+
+Most users have average streak lengths ranging from 50 to 150 days. A few users deviate significantly, with one user (green bar) having a notably higher average streak length of around 250 days. This indicates a consistent usage pattern or engagement over time compared to others.
+While many users show maximum streak lengths around 100 to 200 days, one user (pink bar) stands out with a maximum streak length reaching around 600 days. This suggests a period of sustained engagement for that user, even though their average streak length may be lower.
+
+The users with higher average streak lengths tend to have relatively high maximum streak lengths, but not necessarily the highest. For example, the user with the highest average streak length in the first graph (around 250 days) doesn't have the highest maximum streak length in the second graph.
+The user with the highest maximum streak (around 600 days) has a substantial deviation between their average and maximum streak lengths, suggesting a single or few long streaks rather than consistent long-term behavior.
+
+
+
+
+--AMAZON SCRAPING DATA-- 
+In this section, I wrote a Python Selenium script in order to scrape the top 100 products from specific categories on Amazon, gathering detailed information such as product names, prices, ratings, and other relevant data. Due to the large size of the resulting dataset, the spreadsheets containing this data are not included in the RNotebook but are provided as additional files. Documentation for these files may be written later for further clarification. That being said, I will include the findings of the data here since they can provide insight in the relevent features of the most highly-rated devices.
+
+The 'special features' of the top 100 smartwatches and fitness trackers were separated, tokenized, and standardized to provide insights into their usage and popularity among consumers.
+
+```{r}
+top_100_features_tokenized <- read_csv("output-watch - Sheet5.csv", 
+                                       col_names = FALSE)
+```
+The frequency of each feature from the top 100 smartwatches and fitness trackers was counted and summarized into a data frame, which was then used to generate a visually engaging word cloud to illustrate the most common features.
+
+```{r}
+# Count the frequency of each feature (token)
+word_freq_df <- top_100_features_tokenized %>%
+  group_by(X1) %>%
+  summarise(freq = n()) %>%
+  ungroup()
+
+# Generate the word cloud using wordcloud2
+wordcloud2(word_freq_df, size = .35
+           , color = "random-dark", backgroundColor = "transparent")
+```
+
+The top 15 features of smartwatches were identified by sorting the frequency data frame and selecting the most frequent features. A horizontal bar chart was then created to visually represent these top features.
+```{r}
+# Sort and select the top 15 features
+top_features_df <- word_freq_df %>%
+  arrange(desc(freq)) %>%
+  slice(1:15)  # Keep only the top 15 features
+
+# Create the bar chart
+ggplot(top_features_df, aes(x = reorder(X1, -freq), y = freq)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  labs(title = "Top 15 Smartwatch Features by Frequency", x = "Features", y = "Frequency") +
+  theme_minimal() +
+  coord_flip()  # Flips the axes for better readability
+```
